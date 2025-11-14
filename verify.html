@@ -1,0 +1,127 @@
+<!-- verify.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>digNAH+ Code Verificatie</title>
+  <style>
+    /* Nederlandse opmerking: kleuren afgestemd op index.html */
+    :root {
+      --bg: #0d0f12;
+      --card: #1a1d23;
+      --accent: #4da3ff;
+      --text: #e0e6ed;
+      --text-muted: #9aa3b2;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    .container {
+      background: var(--card);
+      padding: 2rem;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 0 25px rgba(0,0,0,0.35);
+    }
+
+    h1 {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #111317;
+      color: var(--text);
+      margin-top: 1rem;
+      letter-spacing: 3px;
+      text-align: center;
+      font-size: 1.1rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.8rem;
+      margin-top: 1rem;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+
+    button:hover {
+      background: #6ab4ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Code verificatie</h1>
+    <p>Voer de verificatiecode in die per e-mail is verzonden.</p>
+
+    <!-- Nederlandse opmerking: invoerveld voor verificatiecode -->
+    <input id="code" type="text" maxlength="6" placeholder="123456" />
+
+    <!-- Nederlandse opmerking: verzenden van code ter verificatie -->
+    <button onclick="verifyCode()">Verifieer code</button>
+
+    <p id="status"></p>
+  </div>
+
+  <script>
+    // Nederlandse opmerking: haalt e-mailadres uit URL-parameters
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get("email");
+
+    async function verifyCode() {
+      const code = document.getElementById('code').value.trim();
+      const status = document.getElementById('status');
+      status.textContent = 'Verwerken...';
+
+      try {
+        const res = await fetch('/verify_code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, code })
+        });
+
+        const data = await res.json();
+        if (data.status === 'verified') {
+          status.textContent = 'Succesvol ingelogd. Laden...';
+          window.location.href = '/model';
+        } else {
+          status.textContent = data.error || 'Ongeldige code.';
+        }
+      } catch (e) {
+        status.textContent = 'Serverfout.';
+      }
+    }
+  </script>
+</body>
+</html>
+<!-- verify.html -->

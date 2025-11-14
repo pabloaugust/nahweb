@@ -1,0 +1,123 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>digNAH+ Login</title>
+  <style>
+    /* Nederlandse opmerking: basis kleuren overgenomen uit dignah.html */
+    :root {
+      --bg: #0d0f12;
+      --card: #1a1d23;
+      --accent: #4da3ff;
+      --text: #e0e6ed;
+      --text-muted: #9aa3b2;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    .container {
+      background: var(--card);
+      padding: 2rem;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 0 25px rgba(0,0,0,0.35);
+    }
+
+    h1 {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    input[type="email"] {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #111317;
+      color: var(--text);
+      margin-top: 1rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.8rem;
+      margin-top: 1rem;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+
+    button:hover {
+      background: #6ab4ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="info-box" style="margin-bottom: 1.2rem; padding: 1rem; background: #111317; border-radius: 8px; color: var(--text-muted); font-size: 0.9rem;">
+      <!-- Nederlandse opmerking: informatievak met uitleg doel pagina en loginreden -->
+      Deze pagina geeft toegang tot de beveiligde digNAH+ omgeving, bedoeld voor professionele ondersteuning bij het opstellen van EVC‑bewijslast binnen Social Work. Om zorgvuldige omgang met gegevens en toegangscontrole te waarborgen is inloggen via e‑mail noodzakelijk. Indien u behoort tot de gebruikersgroep maar geen toegang kunt verkrijgen, neemt u contact op met de systeembeheerder voor het toevoegen van uw e‑mailadres.
+    </div>
+    <h1>digNAH+</h1>
+    <p>Voer je zakelijke e-mailadres in om toegang te verkrijgen.</p>
+
+    <!-- Nederlandse opmerking: e-mailveld voor login-verificatie -->
+    <input id="email" type="email" placeholder="you@example.com" />
+
+    <!-- Nederlandse opmerking: knop stuurt verzoek naar backend om code te verzenden -->
+    <button onclick="sendCode()">Verstuur login code</button>
+
+    <p id="status"></p>
+  </div>
+
+  <script>
+    // Nederlandse opmerking: verstuurt e-mailadres naar backend voor code-generatie
+    async function sendCode() {
+      const email = document.getElementById('email').value;
+      const status = document.getElementById('status');
+      status.textContent = 'Verwerken...';
+
+      try {
+        const res = await fetch('/send_code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (data.status === 'sent') {
+          status.textContent = 'Code verzonden. Controleer je e-mail.';
+        } else {
+          status.textContent = data.error || 'Er ging iets mis.';
+        }
+      } catch (e) {
+        status.textContent = 'Serverfout.';
+      }
+    }
+  </script>
+</body>
+</html>
+<!-- index.html -->
