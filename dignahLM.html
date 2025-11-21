@@ -102,16 +102,6 @@
       border-radius: 5px;
     }
     
-    .download-buttons {
-      margin-top: 10px;
-    }
-    
-    .download-buttons button {
-      margin-right: 5px;
-      font-size: 12px;
-      padding: 0.4rem 0.8rem;
-    }
-    
     .chat-buttons {
       display: flex;
       gap: 0.5rem;
@@ -147,10 +137,17 @@
   <div class="container">
     <div class="left">
       <div class="upload-section">
-        <h3>Upload bestand</h3>
-        <input type="file" id="file-input" accept=".docx, .pdf" />
-        <button id="upload-btn">Uploaden</button>
-        <pre id="file-output" style="font-size: 10px; max-height: 200px; overflow-y: auto;"></pre>
+        <h3>Over digNAH+</h3>
+        <p style="font-size: 12px; line-height: 1.5;">
+          Deze assistent helpt je bij het opstellen en analyseren van EVC-bewijslast voor Niet-Aangeboren Hersenletsel (NAH).
+        </p>
+<p style="font-size: 12px; line-height: 1.5;">
+Een A.I. kan fouten maken, je blijft altijd zelf verantwoordelijk voor het eindproduct.</p>
+        <p style="font-size: 11px; color: #666;">
+          <span id="connection-status"></span>
+        </p>
+        <!-- Nederlandse opmerking: system prompt verborgen voor eindgebruiker -->
+        <textarea id="system-prompt" style="display: none;">Je bent digNAH+, een professionele assistent voor EVC-bewijslast bij Niet-Aangeboren Hersenletsel (NAH). Je helpt gebruikers met het opstellen en analyseren van bewijslast documenten.</textarea>
       </div>
     </div>
     <div class="right">
@@ -167,9 +164,10 @@
   </div>
 
   <script>
-    // Nederlandse opmerking: wacht tot DOM geladen is voordat functies worden geïnitialiseerd
+    // Nederlandse opmerking: variabelen voor message tracking en abort control
     let messageCounter = 0;
     let currentAbortController = null;
+    let conversationHistory = []; // Nederlandse opmerking: bewaar gesprek voor context
 
     // Nederlandse opmerking: initialiseer alles wanneer DOM klaar is
     document.addEventListener('DOMContentLoaded', function() {
@@ -177,24 +175,49 @@
       document.getElementById('send-btn').addEventListener('click', sendMessage);
       document.getElementById('stop-btn').addEventListener('click', stopGeneration);
       document.getElementById('clear-btn').addEventListener('click', clearChat);
-      document.getElementById('upload-btn').addEventListener('click', uploadFile);
       
-      // Enter key om te verzenden
+      // Enter key om te verzenden (Shift+Enter voor nieuwe regel)
       document.getElementById('user-input').addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           sendMessage();
         }
       });
+      
+      // Check verbinding met LM Studio
+      checkConnection();
     });
+
+    // Nederlandse opmerking: controleer of backend bereikbaar is (zonder technische details te tonen)
+    async function checkConnection() {
+      const statusEl = document.getElementById('connection-status');
+      try {
+        const response = await fetch(`${window.API_URL}/v1/models`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+          statusEl.innerHTML = '✅ Assistent beschikbaar';
+          statusEl.style.color = 'green';
+        } else {
+          statusEl.innerHTML = '⚠️ Assistent tijdelijk niet beschikbaar';
+          statusEl.style.color = 'orange';
+        }
+      } catch (error) {
+        statusEl.innerHTML = '❌ Kan geen verbinding maken';
+        statusEl.style.color = 'red';
+      }
+    }
 
     async function sendMessage() {
       const input = document.getElementById('user-input');
       const sendBtn = document.getElementById('send-btn');
       const stopBtn = document.getElementById('stop-btn');
       const chatBox = document.getElementById('chat-box');
+      const systemPrompt = document.getElementById('system-prompt');
       
-      // Nederlandse opmerking: null check om innerHTML error te voorkomen
+      // Nederlandse opmerking: null check om errors te voorkomen
       if (!input || !sendBtn || !stopBtn || !chatBox) {
         console.error('Een of meer elementen niet gevonden');
         return;
@@ -208,8 +231,15 @@
       sendBtn.style.display = 'none';
       stopBtn.style.display = 'inline-block';
       
-      chatBox.innerHTML += `<div><strong>Jij:</strong> ${message}</div>`;
+      // Toon user bericht
+      chatBox.innerHTML += `<div><strong>Jij:</strong> ${escapeHtml(message)}</div>`;
       input.value = '';
+      
+      // Voeg toe aan conversation history
+      conversationHistory.push({
+        role: 'user',
+        content: message
+      });
       
       messageCounter++;
       const msgId = `msg-${messageCounter}`;
@@ -219,10 +249,6 @@
         <div id="${msgId}" class="message-box">
           <strong class="thinking">digNAH+</strong> 
           <div id="${msgId}-content" style="white-space: pre-wrap;"></div>
-          <div class="download-buttons" id="${msgId}-buttons" style="display: none;">
-            <button onclick="downloadDocx('${msgId}')">📄 Download DOCX</button>
-            <button onclick="downloadPdf('${msgId}')">📕 Download PDF</button>
-          </div>
         </div>
       `;
       chatBox.scrollTop = chatBox.scrollHeight;
@@ -230,14 +256,38 @@
       // Maak AbortController
       currentAbortController = new AbortController();
       
-      // Start streaming
+      // Nederlandse opmerking: bouw messages array op voor OpenAI formaat
+      const messages = [];
+      
+      // System prompt toevoegen
+      if (systemPrompt && systemPrompt.value.trim()) {
+        messages.push({
+          role: 'system',
+          content: systemPrompt.value.trim()
+        });
+      }
+      
+      // Voeg conversation history toe
+      messages.push(...conversationHistory);
+      
+      // Start streaming naar LM Studio
       try {
-        const response = await fetch(`${window.API_URL}/chat`, {
+        const response = await fetch(`${window.API_URL}/v1/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: message }),
+          body: JSON.stringify({
+            model: window.MODEL_NAME || 'local-model',
+            messages: messages,
+            stream: true,
+            temperature: 0.7,
+            max_tokens: 2048
+          }),
           signal: currentAbortController.signal
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -255,35 +305,41 @@
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
-              const data = line.slice(6);
+              const data = line.slice(6).trim();
+              
               if (data === '[DONE]') {
-                // Toon download knoppen
-                const buttonsDiv = document.getElementById(`${msgId}-buttons`);
-                if (buttonsDiv) buttonsDiv.style.display = 'block';
                 continue;
               }
               
               try {
                 const json = JSON.parse(data);
-                if (json.content) {
-                  // Verwijder knipperende digNAH+ bij eerste chunk
-                  if (firstChunk && msgBox) {
-                    const strongEl = msgBox.querySelector('strong');
-                    if (strongEl) {
-                      strongEl.className = '';
-                      strongEl.textContent = 'digNAH+:';
-                    }
-                    firstChunk = false;
-                  }
+                
+                // Nederlandse opmerking: OpenAI streaming formaat parsen
+                if (json.choices && json.choices[0]) {
+                  const delta = json.choices[0].delta;
                   
-                  fullResponse += json.content;
-                  if (contentDiv) {
-                    contentDiv.textContent = fullResponse;
-                    chatBox.scrollTop = chatBox.scrollHeight;
+                  if (delta && delta.content) {
+                    // Verwijder knipperende indicator bij eerste chunk
+                    if (firstChunk && msgBox) {
+                      const strongEl = msgBox.querySelector('strong');
+                      if (strongEl) {
+                        strongEl.className = '';
+                        strongEl.textContent = 'digNAH+:';
+                      }
+                      firstChunk = false;
+                    }
+                    
+                    fullResponse += delta.content;
+                    if (contentDiv) {
+                      contentDiv.textContent = fullResponse;
+                      chatBox.scrollTop = chatBox.scrollHeight;
+                    }
                   }
                 }
+                
+                // Error afhandeling
                 if (json.error && contentDiv) {
-                  contentDiv.innerHTML = `<span style="color: red;">Error: ${json.error}</span>`;
+                  contentDiv.innerHTML = `<span style="color: red;">Error: ${json.error.message || json.error}</span>`;
                   if (msgBox) {
                     const strongEl = msgBox.querySelector('strong');
                     if (strongEl) {
@@ -293,10 +349,18 @@
                   }
                 }
               } catch (e) {
-                // Skip invalid JSON
+                // Skip invalid JSON (kan voorkomen bij incomplete chunks)
               }
             }
           }
+        }
+        
+        // Voeg assistant response toe aan history
+        if (fullResponse) {
+          conversationHistory.push({
+            role: 'assistant',
+            content: fullResponse
+          });
         }
         
       } catch (error) {
@@ -319,6 +383,10 @@
             strongEl.textContent = 'digNAH+:';
           }
         }
+        
+        // Verwijder laatste user bericht uit history bij error
+        conversationHistory.pop();
+        
       } finally {
         // Re-enable input en reset buttons
         input.disabled = false;
@@ -328,82 +396,12 @@
         input.focus();
       }
     }
-
-    async function downloadDocx(msgId) {
-      const msgElement = document.getElementById(msgId);
-      if (!msgElement) return;
-      
-      const contentDiv = msgElement.querySelector(`#${msgId}-content`);
-      if (!contentDiv) return;
-      
-      const text = contentDiv.innerText;
-      
-      const response = await fetch(`${window.API_URL}/export/docx`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text })
-      });
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'dignah_bewijslast.docx';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    }
-
-    async function downloadPdf(msgId) {
-      const msgElement = document.getElementById(msgId);
-      if (!msgElement) return;
-      
-      const contentDiv = msgElement.querySelector(`#${msgId}-content`);
-      if (!contentDiv) return;
-      
-      const text = contentDiv.innerText;
-      
-      const response = await fetch(`${window.API_URL}/export/pdf`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text })
-      });
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'dignah_bewijslast.pdf';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    }
-
-    async function uploadFile() {
-      const input = document.getElementById('file-input');
-      const outputDiv = document.getElementById('file-output');
-      
-      if (!input || !outputDiv) return;
-      
-      const file = input.files[0];
-      if (!file) return;
-      
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      try {
-        const res = await fetch(`${window.API_URL}/upload`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        const data = await res.json();
-        outputDiv.innerText = data.text || 'Geen inhoud gelezen.';
-      } catch (error) {
-        outputDiv.innerText = `Error: ${error.message}`;
-      }
+    
+    // Nederlandse opmerking: escape HTML om XSS te voorkomen
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
     
     function clearChat() {
@@ -411,6 +409,7 @@
         const chatBox = document.getElementById('chat-box');
         if (chatBox) chatBox.innerHTML = '';
         messageCounter = 0;
+        conversationHistory = []; // Reset conversation history
       }
     }
     
